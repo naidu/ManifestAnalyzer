@@ -5,6 +5,8 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.AssetManager;
+import android.content.res.XmlResourceParser;
 import android.os.Bundle;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -18,6 +20,8 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
+
+import org.xmlpull.v1.XmlPullParser;
 
 import java.util.HashMap;
 import java.util.List;
@@ -98,6 +102,32 @@ public class ScrollingActivity
             // Get the package info
             PackageInfo packageInfo = getPackageManager().getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
             requestedPermissions = packageInfo.requestedPermissions;
+
+            AssetManager am = getApplicationContext().createPackageContext(packageName, 0).getAssets();
+            XmlResourceParser parseXml = am.openXmlResourceParser("AndroidManifest.xml");
+
+//            while (parseXml.getEventType() != XmlResourceParser.END_DOCUMENT) {
+//                if (parseXml.getEventType() == XmlResourceParser.START_TAG) {
+//                    String tagName = parseXml.getName();
+//                    String nameAttr = parseXml.getAttributeValue(null, "name");
+//                    //if (nameAttr != null)
+//                        Log.i("ManifestAnalyzer", tagName + ": " + nameAttr);
+//                }
+//                parseXml.next();
+//            }
+
+            int eventType;
+            while ((eventType = parseXml.nextToken()) != XmlPullParser.END_DOCUMENT) {
+                if (eventType == XmlPullParser.START_TAG) {
+                    for (int i = 0; i < parseXml.getAttributeCount(); i++) {
+                        String tagName = parseXml.getAttributeName(i);
+                        String nameAttr = parseXml.getAttributeValue(i);
+                        String attributeType = parseXml.getAttributeType(i);
+                        Log.i("ManifestAnalyzer", tagName + ": " + attributeType + ": " + nameAttr);
+                    }
+                }
+            }
+            parseXml.close();
         } catch(Exception e)
         {
             Log.e("MA", e.getLocalizedMessage());
