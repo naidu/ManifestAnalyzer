@@ -2,29 +2,27 @@ package com.btrnaidu.manifestanalyzer;
 
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
-import android.content.pm.PackageInfo;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.content.res.AssetManager;
-import android.content.res.XmlResourceParser;
 import android.os.Bundle;
-
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.snackbar.Snackbar;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
 import android.util.Log;
-import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 
-import org.xmlpull.v1.XmlPullParser;
 
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
 
 public class ScrollingActivity
     extends AppCompatActivity
@@ -37,44 +35,34 @@ public class ScrollingActivity
         super.onCreate(savedInstanceState);
 
         HashMap<String,String> installedApps = getInstalledPackages();
-        String fbPackageName = installedApps.get("Facebook");
-        Log.d("MA", "Facebook package name: " + fbPackageName);
+        String appToShow = "9292";
+        String packageName = installedApps.get(appToShow);
+        Log.d("MA", appToShow + " package name: " + packageName);
 
-        String fbManifestFile = getAppManifest(fbPackageName);
+        String apkFilePath = getApkFilePath(packageName);
+        Log.d("MA", apkFilePath);
+
+        DecompressXML dx = new DecompressXML();
+        String xml = dx.decompressXML(getByteXNL(apkFilePath)); //"testing"; //
+
+        String prittyXML = new XmlFormatter().prettyFormat(xml);
+
+        String appDetailsFromManifest = String.join("\n","Manifest of " + appToShow + " app\n", prittyXML);
 
         setContentView(R.layout.activity_scrolling);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         TextView tv_manifestViewer = findViewById(R.id.tv_manifestViewer);
-        tv_manifestViewer.setText(fbManifestFile);
+        tv_manifestViewer.setText(appDetailsFromManifest);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(
-            new View.OnClickListener()
-            {
-                @Override
-                public void onClick(
-                    View view)
-                {
-                    Snackbar
-                        .make(
-                            view,
-                            "Replace with your own action",
-                            Snackbar.LENGTH_LONG)
-                        .setAction(
-                            "Action",
-                            null)
-                        .show();
-                }
-            });
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
         // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_scrolling, menu);
+        //getMenuInflater().inflate(R.menu.menu_scrolling, menu);
         return true;
     }
 
@@ -93,49 +81,53 @@ public class ScrollingActivity
         return super.onOptionsItemSelected(item);
     }
 
-    public String getAppManifest(String packageName)
+    private String getApkFilePath(String packageName)
     {
-        String manifestXML;
-        String[] requestedPermissions = {};
+        String apkFilePath = null;
 
+        PackageManager pm = getApplicationContext().getPackageManager();
         try {
-            // Get the package info
-            PackageInfo packageInfo = getPackageManager().getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
-            requestedPermissions = packageInfo.requestedPermissions;
-
-            AssetManager am = getApplicationContext().createPackageContext(packageName, 0).getAssets();
-            XmlResourceParser parseXml = am.openXmlResourceParser("AndroidManifest.xml");
-
-//            while (parseXml.getEventType() != XmlResourceParser.END_DOCUMENT) {
-//                if (parseXml.getEventType() == XmlResourceParser.START_TAG) {
-//                    String tagName = parseXml.getName();
-//                    String nameAttr = parseXml.getAttributeValue(null, "name");
-//                    //if (nameAttr != null)
-//                        Log.i("ManifestAnalyzer", tagName + ": " + nameAttr);
-//                }
-//                parseXml.next();
-//            }
-
-            int eventType;
-            while ((eventType = parseXml.nextToken()) != XmlPullParser.END_DOCUMENT) {
-                if (eventType == XmlPullParser.START_TAG) {
-                    for (int i = 0; i < parseXml.getAttributeCount(); i++) {
-                        String tagName = parseXml.getAttributeName(i);
-                        String nameAttr = parseXml.getAttributeValue(i);
-                        String attributeType = parseXml.getAttributeType(i);
-                        Log.i("ManifestAnalyzer", tagName + ": " + attributeType + ": " + nameAttr);
-                    }
-                }
-            }
-            parseXml.close();
-        } catch(Exception e)
-        {
-            Log.e("MA", e.getLocalizedMessage());
+            ApplicationInfo ai = pm.getApplicationInfo(packageName, 0);
+            apkFilePath = ai.publicSourceDir;
+        } catch (Throwable x) {
         }
 
-        manifestXML = String.join("\n", requestedPermissions);
-        return manifestXML;
+        return apkFilePath;
     }
+
+    private byte[] getByteXNL(String path)
+    {
+        InputStream is = null;
+        ZipFile zip = null;
+
+        byte[] buf = new byte[20480];
+
+        try
+        {
+            if (path.endsWith(".apk") || path.endsWith(".zip")) {
+
+                zip = new ZipFile(path);
+                ZipEntry mft = zip.getEntry("AndroidManifest.xml");
+                is = zip.getInputStream(mft);
+
+            } else {
+                is = new FileInputStream(path);
+            }
+
+            int bytesRead = is.read(buf);
+
+            is.close();
+            if (zip != null) {
+                zip.close();
+            }
+        } catch(Exception e)
+        {
+            e.printStackTrace();
+        }
+
+        return buf;
+    }
+
 
     // Custom method to get all installed package names
     protected HashMap<String,String> getInstalledPackages()
@@ -170,7 +162,7 @@ public class ScrollingActivity
 
             // Put the package name and application label to hash map
             map.put(label, packageName);
-            //Log.d("MA", label + " -> " + packageName);
+            Log.d("MA", label + " -> " + packageName);
         }
         return map;
     }
